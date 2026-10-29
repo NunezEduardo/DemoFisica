@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Simulador de catapulta 3D</title>
+<style>
+/* ===== Tokens (claro / oscuro) ===== */
+:root{--bg:#d9dbdd;--panel:#eceeef;--panel2:#c9ccce;--line:#a9adb0;--ink:#24282b;--muted:#5d6468;--accent:#b8791f;--sky:#dfe2e4;--ground:#9aa0a4;
+  box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#1b1e20;--panel:#272b2e;--panel2:#33383b;--line:#464c50;--ink:#dfe2e4;--muted:#9aa2a7;--accent:#e0a040;--sky:#2b3033;--ground:#3b4144}}
+:root[data-theme="dark"]{--bg:#1b1e20;--panel:#272b2e;--panel2:#33383b;--line:#464c50;--ink:#dfe2e4;--muted:#9aa2a7;--accent:#e0a040;--sky:#2b3033;--ground:#3b4144}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Bahnschrift,"Segoe UI",Roboto,Arial,sans-serif}
+.wrap{max-width:1150px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:1.4rem;margin:0 0 4px}.sub{color:var(--muted);margin:0 0 16px}h2{font-size:1.05rem;margin:0 0 10px}
+.tabs{display:flex;gap:2px;border-bottom:2px solid var(--line);margin-bottom:16px;overflow-x:auto}
+.tabs button{background:none;border:0;padding:10px 16px;font:inherit;color:var(--muted);cursor:pointer;border-bottom:3px solid transparent;margin-bottom:-2px;white-space:nowrap}
+.tabs button[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent);font-weight:600}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.view{display:none}.view.on{display:block}
+.card{background:var(--panel);border:1px solid var(--line);padding:16px}
+.sim{display:grid;grid-template-columns:290px 1fr;gap:16px}
+@media (max-width:820px){.sim{grid-template-columns:1fr}}
+.ctrl{margin-bottom:14px}.ctrl label{display:flex;justify-content:space-between;margin-bottom:4px}
+.ctrl output{font-variant-numeric:tabular-nums;font-weight:600}
+input[type=range]{width:100%;accent-color:var(--accent)}
+select{width:100%;padding:6px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);font:inherit}
+.chk{display:flex;gap:8px;align-items:center;margin:0 0 8px}
+.row{display:flex;gap:8px}
+.btn{flex:1;padding:10px;border:0;font:inherit;font-weight:600;cursor:pointer;background:var(--panel2);color:var(--ink);border-bottom:3px solid var(--line)}
+.btn.main{background:var(--accent);color:#1b1b1b;border-bottom-color:rgba(0,0,0,.35)}
+.btn:disabled{opacity:.55;cursor:default}
+.data{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--line);border:1px solid var(--line);margin-top:14px}
+.data div{background:var(--panel2);padding:7px 10px}.data small{display:block;color:var(--muted)}
+.data b{font-variant-numeric:tabular-nums}
+.stage{position:relative;border:1px solid var(--line);background:var(--sky)}
+canvas.gl{width:100%;height:480px;display:block;touch-action:none;cursor:grab}
+@media (max-width:820px){canvas.gl{height:360px}}
+.hud{position:absolute;left:10px;top:10px;background:rgba(30,34,36,.78);color:#e6e8ea;padding:6px 10px;font-variant-numeric:tabular-nums;font-size:.85rem;pointer-events:none}
+#gcv{width:100%;height:440px;display:block;touch-action:none;cursor:crosshair}
+@media (max-width:820px){#gcv{height:340px}}
+.gmsg{position:absolute;inset:0;display:grid;place-items:center;background:rgba(20,22,24,.6);color:#f0f2f3;font-size:1.25rem;font-weight:600;text-align:center;padding:16px}
+.gmsg[hidden]{display:none}
+details{margin:0 0 12px;border:1px solid var(--line);padding:8px 10px}summary{cursor:pointer;font-weight:600;margin-bottom:8px}
+.tbl{width:100%;border-collapse:collapse;font-size:.85rem;font-variant-numeric:tabular-nums}.tbl th,.tbl td{padding:5px 8px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}.tbl th:last-child,.tbl td:last-child{text-align:left}
+.chart{width:100%;height:260px;display:block;background:var(--panel2)}
+.pbar{position:absolute;right:10px;top:10px;width:140px;height:10px;border:1px solid var(--line);background:rgba(30,34,36,.5);pointer-events:none}.pbar i{display:block;height:100%;width:0;background:var(--accent)}
+.hint{position:absolute;right:10px;bottom:8px;color:var(--muted);font-size:.8rem;pointer-events:none}
+.theory,.expl{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.expl{grid-template-columns:1.6fr 1fr}@media (max-width:820px){.expl{grid-template-columns:1fr}}
+.formula{background:var(--panel2);border-left:4px solid var(--accent);padding:8px 12px;margin:8px 0;font:1rem/1.6 "Cambria Math",Georgia,serif}
+.live{color:var(--muted);font-size:.9rem;margin:6px 0 0}.credits{color:var(--muted);font-size:.85rem;margin:-8px 0 14px}.card p{max-width:70ch}
+.video{aspect-ratio:16/9;background:var(--panel2);border:1px dashed var(--line);display:grid;place-items:center;color:var(--muted);text-align:center;padding:12px}
+video{width:100%;aspect-ratio:16/9;background:#000;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Simulador de catapulta 3D</h1>
+  <p class="sub">Configura el disparo, lánzalo, añade un edificio si quieres y gira la cámara para verlo desde cualquier lado.</p>
+  <p class="credits">Creado por Eduardo Nuñez, Eduardo Rico, Luisana Parra y Fabiola Lopez</p>
+  <div class="tabs" role="tablist">
+    <button role="tab" aria-selected="true" data-v="sim">Simulador</button>
+    <button role="tab" aria-selected="false" data-v="teo">Teoría y física</button>
+    <button role="tab" aria-selected="false" data-v="ana">Análisis y registro</button>
+    <button role="tab" aria-selected="false" data-v="game">Juego</button>
+    <button role="tab" aria-selected="false" data-v="des">Despiece 3D y vídeo</button>
+  </div>
+
+  <section class="view on" id="sim"><div class="sim">
+    <div class="card">
+      <h2>Parámetros</h2>
+      <div class='ctrl'><label for='pre'>Escala de la catapulta</label><select id='pre'><option value='lab'>Laboratorio (realista, 3–5 m)</option><option value='aula'>Prototipo ampliado (hasta 10 m)</option><option value='siege'>Catapulta de asedio (≈100 m)</option></select></div>
+      <div class="ctrl"><label for="ang">Ángulo de lanzamiento <output id="angO"></output></label><input id="ang" type="range" min="5" max="85" step="1" value="45"></div>
+      <div class="ctrl"><label for="vel">Velocidad inicial <output id="velO"></output></label><input id="vel" type="range" min="2" max="9.5" step="0.1" value="8"></div>
+      <div class="ctrl"><label for="wd">Distancia al edificio <output id="wdO"></output></label><input id="wd" type="range" min="3" max="11" step="0.5" value="7"></div>
+      <div class="ctrl"><label for="wh">Altura del edificio <output id="whO"></output></label><input id="wh" type="range" min="0.5" max="3.5" step="0.1" value="2"></div>
+      <label class="chk"><input type="checkbox" id="wall"> Añadir edificio (opcional)</label>
+      <details open><summary>Variables y escenario</summary>
+        <div class='ctrl'><label for='mass'>Masa del proyectil <output id='massO'></output></label><input id='mass' type='range' min='.005' max='.2' step='.005' value='.05'></div>
+        <div class='ctrl'><label for='dia'>Diámetro <output id='diaO'></output></label><input id='dia' type='range' min='2' max='8' step='.5' value='4'></div>
+        <div class='ctrl'><label for='g'>Gravedad</label><select id='g'><option value='9.81'>Tierra (9,81 m/s²)</option><option value='1.62'>Luna (1,62 m/s²)</option><option value='3.71'>Marte (3,71 m/s²)</option><option value='24.8'>Júpiter (24,8 m/s²)</option></select></div>
+        <label class='chk'><input type='checkbox' id='drag' checked> Resistencia del aire</label>
+        <div class='ctrl'><label for='wind'>Viento (+ a favor) <output id='windO'></output></label><input id='wind' type='range' min='-10' max='10' step='.5' value='0'></div>
+        <div class='ctrl'><label for='mode'>Entrada de potencia</label><select id='mode'><option value='v'>Velocidad inicial directa</option><option value='k'>Resorte (k, x, rendimiento)</option></select></div>
+        <div class='ctrl'><label for='kk'>Constante del resorte <output id='kkO'></output></label><input id='kk' type='range' min='50' max='800' step='10' value='200'></div>
+        <div class='ctrl'><label for='xx'>Estiramiento <output id='xxO'></output></label><input id='xx' type='range' min='1' max='25' step='.5' value='10'></div>
+        <div class='ctrl'><label for='eff'>Rendimiento <output id='effO'></output></label><input id='eff' type='range' min='30' max='95' step='1' value='70'></div>
+        <div class='ctrl'><label for='scn'>Escenario</label><select id='scn'><option value='flat'>Terreno llano</option><option value='hill'>Colina</option><option value='pond'>Estanque</option><option value='target'>Diana en el suelo</option></select></div>
+        <div class='ctrl'><label for='sd'>Posición del escenario <output id='sdO'></output></label><input id='sd' type='range' min='3' max='11' step='.1' value='7'></div>
+      </details>
+      <label class="chk"><input type="checkbox" id="follow" checked> Seguir el proyectil</label>
+      <div class="row" style="margin-bottom:8px"><button class="btn main" id="fire">Lanzar</button><button class="btn" id="reset">Reiniciar</button></div>
+      <div class="row"><button class="btn" id="frame">Encuadrar vista</button></div>
+      <div class="data">
+        <div><small>Alcance (sin pared)</small><b id="rR">–</b></div><div><small>Altura máxima</small><b id="rH">–</b></div>
+        <div><small>Tiempo de vuelo</small><b id="rT">–</b></div><div><small>Velocidad al impacto</small><b id="rV">–</b></div>
+        <div><small>Altura de suelta</small><b id="rY">–</b></div><div><small>Resultado</small><b id="rD">–</b></div>
+        <div><small>Alcance ideal (sin aire)</small><b id='rI'>–</b></div><div><small>Desviación del alcance</small><b id='rA'>–</b></div>
+        <div><small>Energía cinética inicial</small><b id='rE'>–</b></div><div><small>Velocidad inicial</small><b id='rV0'>–</b></div>
+      </div>
+    </div>
+    <div class="stage"><canvas class="gl" id="stage" aria-label="Escena 3D de la catapulta"></canvas><div class="hud" id="hud">Listo para lanzar</div><div class="hint">Arrastra para girar · rueda para acercar</div></div>
+  </div></section>
+
+  <section class="view" id="teo"><div class="theory">
+    <div class="card"><h2>Descomposición de la velocidad</h2><p>El disparo se separa en un movimiento horizontal a velocidad constante y otro vertical con aceleración g hacia abajo (sin aire).</p>
+      <div class="formula">v₀ₓ = v₀ · cos θ<br>v₀ᵧ = v₀ · sen θ</div><p class="live" id="lvV"></p></div>
+    <div class="card"><h2>Posición en cada instante</h2><div class="formula">x(t) = v₀ₓ · t<br>y(t) = h₀ + v₀ᵧ · t − ½ · g · t²</div>
+      <p>Eliminando t queda y(x), una parábola: la curva que sigue la bola en 3D. Aquí h₀ es la altura del punto de suelta, que depende del ángulo del brazo.</p></div>
+    <div class="card"><h2>Altura máxima</h2><p>Ocurre cuando v<sub>y</sub> = 0, en t = v₀ᵧ / g.</p><div class="formula">H = h₀ + v₀ᵧ² / (2g)</div><p class="live" id="lvH"></p></div>
+    <div class="card"><h2>Tiempo de vuelo y alcance</h2><p>Llega al suelo cuando y = 0; se toma la raíz positiva.</p>
+      <div class="formula">T = [ v₀ᵧ + √(v₀ᵧ² + 2g·h₀) ] / g<br>R = v₀ₓ · T</div><p>Con h₀ = 0: R = v₀² · sen 2θ / g, máximo a 45°.</p><p class="live" id="lvR"></p></div>
+    <div class='card'><h2>Resistencia del aire y viento</h2><div class='formula'>F<sub>d</sub> = ½ · ρ · C<sub>d</sub> · A · v<sub>rel</sub>²<br>a = −(F<sub>d</sub> / m) · v̂<sub>rel</sub></div><p>Con aire activado se integra la trayectoria paso a paso (Δt = 2 ms) con ρ = 1,2 kg/m³ y C<sub>d</sub> = 0,47 (esfera). La velocidad relativa al aire es v − v<sub>viento</sub>.</p></div>
+    <div class='card'><h2>Energía y resorte</h2><div class='formula'>E = ½ · k · x²<br>v₀ = √( η · k · x² / m )<br>E<sub>c</sub> = ½ · m · v₀²</div><p>En modo resorte, la velocidad sale de la energía almacenada y del rendimiento η del mecanismo.</p></div>
+    <div class='card'><h2>Escalas y escenarios</h2><p>El modelo de laboratorio alcanza 3–5 m. Las escalas mayores y los escenarios (edificio, colina, estanque, diana) comparten la misma física y se miden con las mismas herramientas.</p></div>
+  </div></section>
+
+  <section class='view' id='ana'><div class='theory'>
+    <div class='card'><h2>Registro de lanzamientos</h2>
+      <div class='row' style='margin-bottom:10px'><button class='btn' id='aSweep'>Barrido de ángulos</button><button class='btn' id='aCsv'>Copiar CSV</button><button class='btn' id='aClr'>Borrar</button></div>
+      <div style='overflow-x:auto'><table class='tbl' id='logT'><thead><tr><th>#</th><th>Escala</th><th>θ</th><th>v₀</th><th>m</th><th>Viento</th><th>Aire</th><th>Alcance</th><th>H máx</th><th>Resultado</th></tr></thead><tbody></tbody></table></div>
+      <textarea id='csv' rows='3' readonly style='width:100%;margin-top:10px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);font:12px monospace'></textarea></div>
+    <div class='card'><h2>Trayectorias registradas (últimas 6)</h2><canvas id='ch1' class='chart'></canvas></div>
+    <div class='card'><h2>Alcance según el ángulo</h2><canvas id='ch2' class='chart'></canvas><p class='live' id='swInfo'>Pulsa «Barrido de ángulos» para calcularlo con los parámetros actuales.</p></div>
+  </div></section>
+
+  <section class="view" id="game">
+    <div class="card">
+      <h2>Derriba los objetivos</h2>
+      <p>Arrastra desde la catapulta hacia atrás para fijar el ángulo y la fuerza (se previsualiza la trayectoria) y suelta para disparar. Elimina todos los objetivos ámbar con 4 disparos. Los bloques de piedra aguantan más que los de madera.</p>
+      <div class="row" style="margin-bottom:12px;max-width:420px"><button class="btn" id="greset">Reiniciar nivel</button><button class="btn main" id="gnext" disabled>Siguiente nivel</button></div>
+      <div class="stage"><canvas id="gcv" aria-label="Juego de catapulta"></canvas><div class="hud" id="ghud"></div><div class="pbar"><i id="gbar"></i></div><div class="hint">Arrastra desde la catapulta para apuntar · arrastra en otro punto para girar la cámara</div><div class="gmsg" id="gmsg" hidden></div></div>
+    </div>
+  </section>
+
+  <section class="view" id="des"><div class="expl">
+    <div class="card"><h2>Despiece interactivo</h2>
+      <div class="ctrl"><label for="exp">Separación de piezas <output id="expO">0%</output></label><input id="exp" type="range" min="0" max="100" value="0"></div>
+      <label class="chk"><input type="checkbox" id="rot" checked> Rotación automática</label>
+      <div class="stage"><canvas class="gl" id="xcv" aria-label="Despiece 3D"></canvas><div class="hint">Arrastra para girar · rueda para acercar</div></div></div>
+    <div class="card"><h2>Vídeo o animación secundaria</h2>
+      <div class="video" id="ph">Contenedor listo para un vídeo.<br>Carga un archivo o sustituye el elemento &lt;video&gt;.</div><video id="vid" controls></video>
+      <div class="ctrl" style="margin-top:12px"><label for="file">Cargar vídeo (opcional)</label><input id="file" type="file" accept="video/*"></div></div>
+  </div></section>
+</div>
+
+<footer class="credits" style="text-align:center;padding:0 16px 24px;margin:0">Proyecto creado por Eduardo Nuñez, Eduardo Rico, Luisana Parra y Fabiola Lopez</footer>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+/* ===== 1. Utilidades ===== */
+const $ = id => document.getElementById(id);
+const fmt = (n, u) => n.toFixed(2).replace('.', ',') + ' ' + u;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const rad = d => d * Math.PI / 180;
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+
+/* ===== 2. Física del tiro parabólico (h0 = altura de suelta) ===== */
+function physics(angle, v, h0, g){
+  const vx = v * Math.cos(rad(angle)), vy = v * Math.sin(rad(angle));
+  const H = h0 + vy * vy / (2 * g);
+  const T = (vy + Math.sqrt(vy * vy + 2 * g * h0)) / g;
+  return {vx, vy, H, T, R: vx * T, vImp: Math.hypot(vx, vy - g * T)};
+}
+const pos = (p, h0, g, t) => ({x: p.vx * t, y: h0 + p.vy * t - 0.5 * g * t * t});
+
+/* ===== 3. Modelo 3D de la catapulta (medidas en metros) ===== */
+const PIV = 2.4, L = 3.2, SC = .25;
+let K = .12, Z = .48;                           // K: escala del modelo en el simulador · Z = K / SC: escala de los escenarios                      // altura del eje y largo del brazo
+function beam(a, b, t, mat){                   // viga entre dos puntos
+  const d = b.clone().sub(a), m = new THREE.Mesh(new THREE.BoxGeometry(t, d.length(), t), mat);
+  m.position.copy(a).addScaledVector(d, .5);
+  m.quaternion.setFromUnitVectors(V3(0, 1, 0), d.normalize()); return m;
+}
+function buildCatapult(){
+  const M = (c, m = .6, r = .45) => new THREE.MeshStandardMaterial({color: c, metalness: m, roughness: r, side: THREE.DoubleSide});
+  const steel = M(0x7b878e), dark = M(0x3b4246), amber = M(0xe0a040, .3, .4);
+  const base = new THREE.Group(); base.add(new THREE.Mesh(new THREE.BoxGeometry(6.4, .8, 3.6), dark));
+  base.children[0].position.y = .4;
+  
+  const frame = new THREE.Group();
+  for (const z of [-1.2, 1.2]){
+    frame.add(beam(V3(-1.5, .7, z), V3(0, PIV, z), .26, steel), beam(V3(1.5, .7, z), V3(0, PIV, z), .26, steel));
+  }
+  frame.add(beam(V3(-1.5, .9, -1.2), V3(-1.5, .9, 1.2), .2, steel), beam(V3(1.5, .9, -1.2), V3(1.5, .9, 1.2), .2, steel));
+  const axle = new THREE.Mesh(new THREE.CylinderGeometry(.14, .14, 3.2, 16), amber);
+  axle.rotation.x = Math.PI / 2; axle.position.set(0, PIV, 0); frame.add(axle);
+  const pivot = new THREE.Group(); pivot.position.set(0, PIV, 0);
+  const beamM = new THREE.Mesh(new THREE.BoxGeometry(4.8, .3, .3), steel); beamM.position.x = .8;
+  const weight = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1.1), dark); weight.position.set(-1.6, -.7, 0);
+  const bucket = new THREE.Mesh(new THREE.SphereGeometry(.55, 24, 12, 0, Math.PI * 2, Math.PI / 2, Math.PI / 2), amber); bucket.position.set(L, 0, 0);
+  pivot.add(beamM, weight, bucket);
+  const root = new THREE.Group().add(base, frame, pivot);
+  root.traverse(o => { if (o.isMesh){ o.castShadow = true; o.receiveShadow = true; } });
+  return {root, base, frame, pivot, beamM, weight, bucket};
+}
+function label(text, depth = true){            // etiqueta de texto como sprite
+  const c = document.createElement('canvas'); c.width = 256; c.height = 64;
+  const x = c.getContext('2d'); x.fillStyle = 'rgba(30,34,36,.85)'; x.fillRect(0, 0, 256, 64);
+  x.fillStyle = '#e6e8ea'; x.font = 'bold 30px sans-serif'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(text, 128, 34);
+  const s = new THREE.Sprite(new THREE.SpriteMaterial({map: new THREE.CanvasTexture(c), depthTest: depth}));
+  s.scale.set(4, 1, 1); return s;
+}
+function makeScene(cv){                         // escena + render + luces comunes
+  const sc = new THREE.Scene(), ren = new THREE.WebGLRenderer({canvas: cv, antialias: true});
+  ren.setPixelRatio(Math.min(devicePixelRatio, 2)); ren.shadowMap.enabled = true; ren.shadowMap.type = THREE.PCFSoftShadowMap;
+  sc.add(new THREE.HemisphereLight(0xffffff, 0x555a5e, .75));
+  const sun = new THREE.DirectionalLight(0xfff2dd, .95); sun.castShadow = true; sun.shadow.mapSize.set(2048, 2048); sc.add(sun, sun.target);
+  return {sc, ren, sun};
+}
+function size(ren, cam, cv){                    // ajusta el render al tamaño del lienzo
+  const w = cv.clientWidth, h = cv.clientHeight;
+  if (w && (cv._w !== w || cv._h !== h)){ cv._w = w; cv._h = h; ren.setSize(w, h, false); cam.aspect = w / h; cam.updateProjectionMatrix(); }
+}
+
+/* ===== 4. Escena del simulador ===== */
+const S = makeScene($('stage')), sc = S.sc, ren = S.ren;
+const cam = new THREE.PerspectiveCamera(45, 1, .05, 800);
+const ctl = new THREE.OrbitControls(cam, $('stage')); ctl.enableDamping = true; ctl.maxPolarAngle = Math.PI / 2.02; ctl.minDistance = .6;
+const groundMat = new THREE.MeshStandardMaterial({roughness: .95, metalness: 0});
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), groundMat); ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; sc.add(ground);
+const grid = new THREE.GridHelper(400, 400, 0xffffff, 0xffffff); grid.position.y = .02; grid.material.transparent = true; grid.material.opacity = .35; sc.add(grid);
+const laneMat = new THREE.MeshStandardMaterial({roughness: 1}); const lane = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1.2), laneMat);
+lane.rotation.x = -Math.PI / 2; lane.position.y = .03; lane.receiveShadow = true; sc.add(lane);
+const postG = new THREE.Group(); sc.add(postG);
+function buildPosts(step){                      // postes de distancia según la escala
+  while (postG.children.length) postG.remove(postG.children[0]);
+  for (let m = 1; m <= 16; m++){            // postes de distancia cada 10 m
+  const post = new THREE.Mesh(new THREE.BoxGeometry(.04 * Z, .3 * Z, .04 * Z), new THREE.MeshStandardMaterial({color: 0xe0a040})); post.position.set(m * step, .15 * Z, -.9 * Z); post.castShadow = true;
+  const lb = label(+(m * step).toFixed(1) + ' m'); lb.scale.set(.8 * Z + .3, .2 * Z + .08, 1); lb.position.set(m * step, .5 * Z + .1, -.9 * Z); postG.add(post, lb);
+  }
+}
+const cat = buildCatapult(); sc.add(cat.root);   // modelo a escala 1:4
+const wallG = new THREE.Group(); sc.add(wallG);
+const wallMat = new THREE.MeshStandardMaterial({color: 0x8b8f93, roughness: .85}), winMat = new THREE.MeshStandardMaterial({color: 0x2c3236, roughness: .3, metalness: .5});
+const mark = new THREE.Mesh(new THREE.CircleGeometry(.07, 24), new THREE.MeshBasicMaterial({color: 0x15181a, transparent: true, opacity: .85}));
+mark.rotation.y = -Math.PI / 2; mark.visible = false; sc.add(mark);   // marca del impacto
+function buildWall(){                           // pared o edificio con ventanas
+  while (wallG.children.length) wallG.remove(wallG.children[0]);
+  if (!P.wallOn) return;
+  const wd = P.wd / Z, wh = P.wh / Z, body = new THREE.Mesh(new THREE.BoxGeometry(WD, wh, 2.4), wallMat);
+  body.position.set(wd + WD / 2, wh / 2, 0); body.castShadow = body.receiveShadow = true; wallG.add(body);
+  for (let y = .45; y < wh - .15; y += .6) for (const z of [-.8, 0, .8]){
+    const w = new THREE.Mesh(new THREE.PlaneGeometry(.38, .3), winMat); w.position.set(wd - .003, y, z); w.rotation.y = -Math.PI / 2; wallG.add(w);
+  }
+  const cap = new THREE.Mesh(new THREE.BoxGeometry(WD + .08, .05, 2.48), new THREE.MeshStandardMaterial({color: 0x4a5156}));
+  cap.position.set(wd + WD / 2, wh + .025, 0); wallG.add(cap);
+}
+/* ===== Escalas, escenarios y motor numérico (aire, viento, terreno) ===== */
+const sceneG = new THREE.Group(); sc.add(sceneG);
+const hillH = (x, q) => { const hw = 1.2 * q.Z, d = Math.abs(x - q.sd); return q.sc === 'hill' && d < hw ? .9 * q.Z * (1 + Math.cos(Math.PI * d / hw)) / 2 : 0; };
+function buildScenery(){                        // colina, estanque o diana
+  while (sceneG.children.length) sceneG.remove(sceneG.children[0]);
+  const {sc: kind, sd} = P;
+  if (kind === 'hill'){
+    const hw = 1.2 * Z, g = new THREE.PlaneGeometry(2 * hw, 2.4 * Z, 48, 1); g.rotateX(-Math.PI / 2);
+    const pa = g.attributes.position; for (let i = 0; i < pa.count; i++) pa.setY(i, hillH(pa.getX(i) + sd, P));
+    g.computeVertexNormals();
+    const m = new THREE.Mesh(g, new THREE.MeshStandardMaterial({color: new THREE.Color(css('--ground')).offsetHSL(0, 0, .1), roughness: .95})); m.position.x = sd; m.castShadow = m.receiveShadow = true; sceneG.add(m);
+  }
+  if (kind === 'pond'){
+    const m = new THREE.Mesh(new THREE.PlaneGeometry(2 * Z, 2.4 * Z), new THREE.MeshStandardMaterial({color: 0x3f86b5, transparent: true, opacity: .8, roughness: .2, metalness: .3}));
+    m.rotation.x = -Math.PI / 2; m.position.set(sd + Z, .02, 0); sceneG.add(m);
+  }
+  if (kind === 'target') [[1, 0x4a5156], [.75, 0xc9ccce], [.5, 0xe0a040], [.25, 0x3b4246]].forEach(([r, c], i) => {
+    const m = new THREE.Mesh(new THREE.CircleGeometry(r * Z, 48), new THREE.MeshStandardMaterial({color: c, roughness: .8}));
+    m.rotation.x = -Math.PI / 2; m.position.set(sd, .02 + i * .004, 0); m.receiveShadow = true; sceneG.add(m);
+  });
+}
+const PRE = {                                    // escalas: K del modelo, v máx/defecto, masa, diámetro, resorte, estiramiento, paso de cuadrícula
+  lab:   {K: .12, vmax: 6.6, v: 5, m: [.005, .2, .005, .05], d: [2, 8, 4], k: [50, 800, 200], x: [1, 25, 10], step: .5},
+  aula:  {K: .25, vmax: 9.5, v: 8, m: [.02, 1, .01, .1], d: [3, 15, 6], k: [50, 1500, 230], x: [5, 40, 20], step: 1},
+  siege: {K: 1, vmax: 32, v: 25, m: [1, 50, 1, 8], d: [10, 60, 25], k: [500, 30000, 3200], x: [20, 200, 150], step: 5}
+};
+function setRange(id, mn, mx, val){ const e = $(id); e.min = mn; e.max = mx; e.value = val; }
+function applyPreset(){
+  const c = PRE[$('pre').value]; K = c.K; Z = K / SC; cat.root.scale.setScalar(K);
+  setRange('vel', 1, c.vmax, c.v); setRange('mass', c.m[0], c.m[1], c.m[3]); $('mass').step = c.m[2];
+  setRange('dia', c.d[0], c.d[1], c.d[2]); setRange('kk', c.k[0], c.k[1], c.k[2]); setRange('xx', c.x[0], c.x[1], c.x[2]);
+  setRange('wd', 3 * Z, 11 * Z, 7 * Z); setRange('wh', .5 * Z, 3.5 * Z, 2 * Z); setRange('sd', 3 * Z, 11 * Z, 7 * Z);
+  ['wd', 'wh', 'sd'].forEach(i => { $(i).step = Z / 10; });
+  grid.scale.setScalar(c.step); lane.scale.y = Z; buildPosts(c.step); updateUI();
+}
+/* Parámetros del disparo (a = ángulo en grados) */
+function mkQ(a){
+  const t = tipAt(rad(a)), m = +$('mass').value, spring = $('mode').value === 'k';
+  const v = spring ? Math.sqrt(+$('eff').value / 100 * +$('kk').value * Math.pow(+$('xx').value / 100, 2) / m) : +$('vel').value;
+  return {a, v, m, g: +$('g').value, x0: t.x, y0: t.y, drag: $('drag').checked, w: +$('wind').value, wallOn: $('wall').checked, wd: +$('wd').value, wh: +$('wh').value,
+    sc: $('scn').value, sd: +$('sd').value, Z, p: {vx: v * Math.cos(rad(a)), vy: v * Math.sin(rad(a))}};
+}
+/* Integración numérica (Δt = 2 ms): gravedad, arrastre cuadrático, viento, pared y terreno */
+function simulate(q){
+  const {g, m, w, x0, y0, wallOn, wd, wh, sd, Z: z} = q, ZW = WD * z, dt = .002;
+  const kd = q.drag ? .5 * 1.2 * .47 * Math.PI * RB * RB / m : 0;
+  let x = x0, y = y0, vx = q.p.vx, vy = q.p.vy, t = 0, H = y0, plan = {type: 'ground'};
+  const S = [[0, x, y, vx, vy]];
+  while (t < 60){
+    const px = x, ur = vx - w, sp = Math.hypot(ur, vy);
+    vx -= kd * sp * ur * dt; vy -= (g + kd * sp * vy) * dt; x += vx * dt; y += vy * dt; t += dt; H = Math.max(H, y);
+    if (wallOn && plan.type !== 'wall' && x > wd - RB && x < wd + ZW && y <= wh && y >= 0){
+      if (px <= wd - RB){ plan = {type: 'wall', tW: t, yh: y, vHit: Math.hypot(vx, vy)}; x = wd - RB; vx *= -.25; }   // choque: rebota con 25 % de v horizontal
+      else if (vy < 0){ plan = {type: 'roof'}; y = wh; S.push([t, x, y, vx, vy]); break; }
+    }
+    const gh = hillH(x, q);
+    if (y <= gh){
+      y = gh;
+      if (plan.type === 'ground'){
+        if (q.sc === 'pond' && x >= sd && x <= sd + 2 * z) plan = {type: 'water'};
+        else if (q.sc === 'target'){ const r = Math.abs(x - sd) / z; plan = {type: 'target', pts: r <= .25 ? 10 : r <= .5 ? 7 : r <= .75 ? 4 : r <= 1 ? 2 : 0}; }
+      }
+      S.push([t, x, y, vx, vy]); break;
+    }
+    S.push([t, x, y, vx, vy]);
+  }
+  const e = S[S.length - 1];
+  plan.tEnd = e[0]; q.S = S; q.plan = plan; q.p.H = H; q.p.T = e[0]; q.p.R = e[1] - x0; q.p.vImp = Math.hypot(e[3], e[4]);
+}
+/* Lecturas adicionales, rangos de controles y escenario */
+function fillExtra(){
+  const {p, v, m, g, a, y0} = P, id = physics(a, v, y0, g);
+  $('rI').textContent = fmt(id.R, 'm'); $('rA').textContent = ((p.R / id.R - 1) * 100).toFixed(1).replace('.', ',') + ' %';
+  $('rE').textContent = fmt(.5 * m * v * v, 'J'); $('rV0').textContent = fmt(v, 'm/s');
+  $('wdO').textContent = fmt(P.wd, 'm'); $('whO').textContent = fmt(P.wh, 'm'); $('sdO').textContent = fmt(P.sd, 'm');
+  [['mass', 'kg'], ['dia', 'cm'], ['wind', 'm/s'], ['kk', 'N/m'], ['xx', 'cm'], ['eff', '%']].forEach(([i, u]) => { $(i + 'O').textContent = $(i).value + ' ' + u; });
+  const spring = $('mode').value === 'k';
+  ['kk', 'xx', 'eff'].forEach(i => { $(i).disabled = !spring; }); $('vel').disabled = spring; $('sd').disabled = P.sc === 'flat';
+  wallG.scale.setScalar(Z); mark.scale.setScalar(Z); ball.scale.setScalar(RB / .075); buildScenery();
+}
+['mass', 'dia', 'g', 'drag', 'wind', 'mode', 'kk', 'xx', 'eff', 'scn', 'sd'].forEach(id => ['input', 'change'].forEach(ev => $(id).addEventListener(ev, updateUI)));
+$('pre').addEventListener('change', applyPreset);
+
+/* ===== Análisis: registro, gráficas y barrido de ángulos ===== */
+const logs = [], COL = ['#e0a040', '#6fa8c9', '#9ccf7a', '#d77a7a', '#b69ae0', '#d9d26a']; let seq = 0, sweep = null;
+function plot(cv, series, xl, yl){
+  const r = cv.getBoundingClientRect(), d = Math.min(devicePixelRatio || 1, 2); if (!r.width) return;
+  cv.width = r.width * d; cv.height = r.height * d;
+  const c = cv.getContext('2d'); c.setTransform(d, 0, 0, d, 0, 0); const W = r.width, H = r.height, pl = 44, pb = 28;
+  let xm = 0, ym = 0; series.forEach(s => s.pts.forEach(p => { xm = Math.max(xm, p[0]); ym = Math.max(ym, p[1]); })); xm = xm || 1; ym = ym || 1;
+  const X = x => pl + x / xm * (W - pl - 10), Y = y => H - pb - y / ym * (H - pb - 10);
+  c.strokeStyle = css('--line'); c.fillStyle = css('--muted'); c.font = '11px sans-serif'; c.lineWidth = 1;
+  for (let i = 0; i <= 4; i++){
+    c.beginPath(); c.moveTo(X(xm * i / 4), Y(0)); c.lineTo(X(xm * i / 4), Y(ym)); c.moveTo(X(0), Y(ym * i / 4)); c.lineTo(X(xm), Y(ym * i / 4)); c.stroke();
+    c.fillText((xm * i / 4).toFixed(xm < 10 ? 1 : 0), X(xm * i / 4) - 8, H - 12); c.fillText((ym * i / 4).toFixed(ym < 10 ? 1 : 0), 4, Y(ym * i / 4) + 4);
+  }
+  c.fillText(xl, W - 70, H - 1); c.fillText(yl, 4, 10);
+  series.forEach(s => { c.strokeStyle = s.c; c.lineWidth = 2; c.beginPath(); s.pts.forEach((p, i) => i ? c.lineTo(X(p[0]), Y(p[1])) : c.moveTo(X(p[0]), Y(p[1]))); c.stroke(); });
+}
+function drawAna(){
+  $('logT').tBodies[0].innerHTML = logs.map(l => `<tr><td>${l.n}</td><td>${l.pre}</td><td>${l.a}°</td><td>${l.v.toFixed(2)}</td><td>${l.m}</td><td>${l.w}</td><td>${l.air ? 'sí' : 'no'}</td><td>${l.R.toFixed(2)}</td><td>${l.H.toFixed(2)}</td><td>${l.res}</td></tr>`).join('');
+  $('csv').value = 'n,escala,angulo_deg,v0_ms,masa_kg,viento_ms,aire,alcance_m,hmax_m,tiempo_s,resultado\n' + logs.map(l => [l.n, l.pre, l.a, l.v.toFixed(3), l.m, l.w, l.air ? 1 : 0, l.R.toFixed(3), l.H.toFixed(3), l.T.toFixed(3), '"' + l.res + '"'].join(',')).join('\n');
+  if ($('ana').classList.contains('on')){
+    plot($('ch1'), logs.slice(-6).map((l, i) => ({pts: l.pts, c: COL[i % 6]})), 'x (m)', 'y (m)');
+    plot($('ch2'), sweep ? [{pts: sweep, c: COL[0]}] : [], 'ángulo (°)', 'alcance (m)');
+  }
+}
+function logLaunch(){                           // guarda el lanzamiento actual en el registro
+  const S = P.S, pts = []; for (let i = 0; i < S.length; i += 20) pts.push([S[i][1] - P.x0, S[i][2]]);
+  pts.push([S[S.length - 1][1] - P.x0, S[S.length - 1][2]]);
+  logs.push({n: ++seq, pre: $('pre').value, a: P.a, v: P.v, m: P.m, w: P.w, air: P.drag, R: P.p.R, H: P.p.H, T: P.p.T, res: resultText(), pts});
+  if (logs.length > 30) logs.shift(); drawAna();
+}
+$('aSweep').addEventListener('click', () => {   // alcance para cada ángulo con los parámetros actuales
+  sweep = []; let best = [0, -1];
+  for (let a = 5; a <= 85; a += 2.5){ const q = mkQ(a); simulate(q); sweep.push([a, q.p.R]); if (q.p.R > best[1]) best = [a, q.p.R]; }
+  $('swInfo').textContent = `Ángulo óptimo ≈ ${best[0]}° → alcance ${fmt(best[1], 'm')} (mismos parámetros que el simulador).`; drawAna();
+});
+$('aCsv').addEventListener('click', () => { const t = $('csv'); t.select(); try { navigator.clipboard.writeText(t.value).catch(() => document.execCommand('copy')); } catch (e) { document.execCommand('copy'); } });
+$('aClr').addEventListener('click', () => { logs.length = 0; sweep = null; drawAna(); });
+document.querySelector('[data-v="ana"]').addEventListener('click', drawAna);
+window.addEventListener('resize', drawAna);
+
+const ball = new THREE.Mesh(new THREE.SphereGeometry(.075, 24, 16), new THREE.MeshStandardMaterial({color: 0xe0a040, emissive: 0xb8791f, emissiveIntensity: .6, roughness: .3}));
+ball.castShadow = true; sc.add(ball);
+const MAXT = 4000, tpos = new Float32Array(MAXT * 3), tgeo = new THREE.BufferGeometry();       // estela
+tgeo.setAttribute('position', new THREE.BufferAttribute(tpos, 3)); tgeo.setDrawRange(0, 0);
+const trail = new THREE.Points(tgeo, new THREE.PointsMaterial({color: 0xffc261, size: .08, transparent: true, opacity: .85})); trail.frustumCulled = false; sc.add(trail);
+const pred = new THREE.Line(new THREE.BufferGeometry(), new THREE.LineDashedMaterial({color: 0xe0a040, dashSize: .15, gapSize: .1, transparent: true, opacity: .7})); sc.add(pred);
+const tgt = new THREE.Mesh(new THREE.RingGeometry(.18, .24, 40), new THREE.MeshBasicMaterial({color: 0xe0a040, transparent: true, opacity: .5, side: THREE.DoubleSide}));
+tgt.rotation.x = -Math.PI / 2; sc.add(tgt);
+const ring = new THREE.Mesh(new THREE.RingGeometry(.1, .14, 40), new THREE.MeshBasicMaterial({color: 0xffd08a, transparent: true, side: THREE.DoubleSide}));
+ring.rotation.x = -Math.PI / 2; ring.visible = false; sc.add(ring);
+const NB = 60, bpos = new Float32Array(NB * 3), bvel = [], bgeo = new THREE.BufferGeometry();  // chispas del impacto
+bgeo.setAttribute('position', new THREE.BufferAttribute(bpos, 3));
+const burst = new THREE.Points(bgeo, new THREE.PointsMaterial({color: 0xffd08a, size: .07, transparent: true})); burst.visible = false; burst.frustumCulled = false; sc.add(burst);
+
+/* Tema: colores de la escena según el modo claro/oscuro */
+function theme(scene, gm, extra){
+  const sky = new THREE.Color(css('--sky')); scene.background = sky; scene.fog = new THREE.Fog(sky, 90, 480);
+  gm.color.set(css('--ground')); if (extra) extra();
+}
+const themeSim = () => theme(sc, groundMat, () => { laneMat.color.set(css('--ground')).offsetHSL(0, 0, .07); grid.material.color.set(css('--line')); });
+
+/* ===== 5. Estado del lanzamiento ===== */
+let RB = .075;                                  // radio de la bola (m), según el diámetro elegido
+const SW = .45, ARM0 = -1.6, WD = .8;   // RB: radio de la bola · WD: grosor de la pared                    // duración y amplitud del giro del brazo
+let P, state = 'idle', shakeT = 9, hit = false, st = 0, ft = 0, nTrail = 0, ringT = 0, burstT = 0, want = null;
+const tipAt = ang => ({x: K * (L * Math.cos(ang) - .1 * Math.sin(ang)), y: K * (PIV + L * Math.sin(ang) + .1 * Math.cos(ang))});
+
+function readParams(){
+  P = mkQ(+$('ang').value); simulate(P);
+  
+  
+}
+function updateUI(){
+  RB = +$('dia').value / 200; readParams(); const {a, v, g, p, x0, y0} = P;
+  $('angO').textContent = a + '°'; $('velO').textContent = fmt(v, 'm/s');
+  $('rR').textContent = fmt(p.R, 'm'); $('rH').textContent = fmt(p.H, 'm'); $('rT').textContent = fmt(p.T, 's');
+  $('rV').textContent = fmt(impactSpeed(), 'm/s'); $('rY').textContent = fmt(y0, 'm'); $('rD').textContent = resultText(); fillExtra(); $('wdO').textContent = fmt(P.wd, 'm'); $('whO').textContent = fmt(P.wh, 'm'); buildWall(); $('wd').disabled = $('wh').disabled = !P.wallOn;
+  $('lvV').textContent = `Ahora: v₀ₓ = ${fmt(p.vx, 'm/s')} · v₀ᵧ = ${fmt(p.vy, 'm/s')}`;
+  $('lvH').textContent = `Ahora: H = ${fmt(p.H, 'm')} (h₀ = ${fmt(y0, 'm')})`;
+  $('lvR').textContent = `Ahora: T = ${fmt(p.T, 's')} · R = ${fmt(p.R, 'm')}`;
+  const pts = []; for (let i = 0; i <= 120; i++){ const q = pathAt(P.plan.tEnd * i / 120); pts.push(V3(q.x, Math.max(q.y, RB), 0)); }
+  pred.geometry.dispose(); pred.geometry = new THREE.BufferGeometry().setFromPoints(pts); pred.computeLineDistances();
+  { const e = pathAt(P.plan.tEnd); tgt.position.set(e.x, e.y + .04, 0); }
+  const ex = Math.max(x0 + p.R, P.wallOn ? P.wd : 0, 4); S.sun.position.set(ex * .5 + 8 * Z + 4, 16 * Z + 6, 10 * Z + 4); S.sun.target.position.set(ex * .5, 0, 0);
+  const sh = S.sun.shadow.camera, k = Math.max(ex * .6 + 3, 6); sh.left = -k; sh.right = k; sh.top = k; sh.bottom = -k; sh.far = ex * 1.5 + 60; sh.updateProjectionMatrix();
+  resetSim();
+}
+function frameView(instant){                    // encuadra toda la trayectoria
+  const {p, x0} = P, ext = P.wallOn ? P.wd + 1.5 : x0 + p.R, tg = V3(ext * .5, Math.max(p.H * .3, .5), 0);
+  want = {t: tg, p: V3(tg.x - ext * .05, p.H * .5 + 1.2, Math.max(ext * .9, p.H * 2, 3.5) + 3)};
+  if (instant){ cam.position.copy(want.p); ctl.target.copy(want.t); want = null; }
+}
+function pathAt(t){                             // posición y velocidad de la bola en el instante t (interpola la simulación)
+  const S = P.S, i = Math.min(Math.floor(t / .002), S.length - 2), a = S[i], b = S[i + 1], f = Math.min(Math.max((t - a[0]) / (b[0] - a[0] || 1), 0), 1);
+  return {x: a[1] + (b[1] - a[1]) * f, y: a[2] + (b[2] - a[2]) * f, vx: a[3], vy: a[4]};
+}
+function impactSpeed(){ return P.plan.vHit || P.p.vImp; }
+function resultText(){
+  const {plan, p, x0, wallOn, wd} = P;
+  if (plan.type === 'wall') return `Choca a ${fmt(plan.yh, 'm')} de altura`;
+  if (plan.type === 'roof') return 'Cae sobre el tejado';
+  if (plan.type === 'water') return 'Cae al agua';
+  if (plan.type === 'target') return `Diana: ${plan.pts} puntos`;
+  const xl = x0 + p.R; return wallOn ? (xl < wd ? 'Cae antes de la pared' : 'Pasa por encima') : `Cae a ${fmt(xl, 'm')}`;
+}
+function spawn(x, y, dir){                      // chispas: dir -1 sale hacia atrás (pared), 0 hacia los lados (suelo)
+  for (let i = 0; i < NB; i++){ bpos.set([x, y, 0], i * 3); bvel[i] = V3(dir * Math.random() * 1.2 + (Math.random() - .5) * .8, .8 + Math.random() * 1.6, (Math.random() - .5) * 1.4); }
+  burst.visible = true; burst.material.opacity = 1; burstT = 0;
+}
+function wallHit(){                             // choque contra la pared: marca, temblor y chispas
+  const h = P.plan; mark.position.set(P.wd - .004, h.yh, 0); mark.visible = true; shakeT = 0; spawn(P.wd, h.yh, -1);
+  $('hud').textContent = `¡Impacto contra la pared a ${fmt(h.yh, 'm')} de altura!`;
+}
+function placeBall(ang){ const t = tipAt(ang); ball.position.set(t.x, t.y, 0); }
+function resetSim(){
+  state = 'idle'; nTrail = 0; tgeo.setDrawRange(0, 0); ring.visible = false; burst.visible = false; mark.visible = false; wallG.position.x = 0; shakeT = 9;
+  cat.pivot.rotation.z = rad(P.a); placeBall(rad(P.a)); $('fire').disabled = false; $('hud').textContent = 'Listo para lanzar';
+  if (!ctl._init){ frameView(true); ctl._init = 1; } else frameView(false);
+}
+function fire(){ if (state !== 'idle') return; state = 'swing'; st = 0; logLaunch(); $('fire').disabled = true; if ($('follow').checked) want = null; }
+function land(){
+  state = 'done'; $('fire').disabled = false;
+  const e = pathAt(P.plan.tEnd), ey = e.y; ring.position.set(e.x, ey + .05, 0); ring.visible = true; ringT = 0; spawn(e.x, ey + RB, 0);
+  
+  burst.visible = true; burst.material.opacity = 1; burstT = 0;
+}
+function stepSim(dt){
+  const {p, g, x0, y0} = P;
+  if (state === 'swing'){                       // el brazo gira y suelta la bola
+    st += dt; const k = Math.min(st / SW, 1), e = 1 - Math.pow(1 - k, 3), ang = rad(P.a) + ARM0 * (1 - e);
+    cat.pivot.rotation.z = ang; placeBall(ang);
+    if (k >= 1){ state = 'flight'; ft = 0; hit = false; }
+  } else if (state === 'flight'){
+    ft += dt; const t = Math.min(ft, P.plan.tEnd), q = pathAt(t), y = Math.max(q.y, RB);
+    ball.position.set(q.x, y, 0); if (P.plan.type === 'wall' && !hit && ft >= P.plan.tW){ hit = true; wallHit(); }
+    if (nTrail < MAXT){ tpos.set([q.x, y, 0], nTrail * 3); nTrail++; tgeo.setDrawRange(0, nTrail); tgeo.attributes.position.needsUpdate = true; }
+    const vyNow = q.vy, vxNow = q.vx;
+    $('hud').textContent = `t ${t.toFixed(2)} s · x ${q.x.toFixed(1)} m · y ${Math.max(q.y, 0).toFixed(1)} m · v ${Math.hypot(vxNow, vyNow).toFixed(1)} m/s`;
+    if (ft >= P.plan.tEnd){ land(); $('hud').textContent = resultText(); }
+  }
+  if (shakeT < .5){ shakeT += dt; wallG.position.x = Math.sin(shakeT * 70) * .012 * (1 - shakeT / .5); } else wallG.position.x = 0;
+  if (ring.visible){ ringT += dt; ring.scale.setScalar(1 + ringT * 6); ring.material.opacity = Math.max(1 - ringT * 1.2, 0); }
+  if (burst.visible){
+    burstT += dt; for (let i = 0; i < NB; i++){ const v = bvel[i]; v.y -= 9.8 * dt; bpos[i * 3] += v.x * dt; bpos[i * 3 + 1] = Math.max(bpos[i * 3 + 1] + v.y * dt, .05); bpos[i * 3 + 2] += v.z * dt; }
+    bgeo.attributes.position.needsUpdate = true; burst.material.opacity = Math.max(1 - burstT, 0); if (burstT > 1) burst.visible = false;
+  }
+  if ($('follow').checked && (state === 'swing' || state === 'flight')){    // cámara sigue a la bola
+    const old = ctl.target.clone(); ctl.target.lerp(ball.position, .12); cam.position.add(ctl.target.clone().sub(old));
+  } else if (want){
+    cam.position.lerp(want.p, .07); ctl.target.lerp(want.t, .07); if (cam.position.distanceTo(want.p) < .05) want = null;
+  }
+}
+ctl.addEventListener('start', () => { want = null; });
+
+/* ===== 6. Escena del despiece 3D ===== */
+const X = makeScene($('xcv')), xs = X.sc, xr = X.ren, xcam = new THREE.PerspectiveCamera(42, 1, .1, 200);
+xcam.position.set(10, 6.5, 13); X.sun.position.set(10, 20, 12); X.sun.shadow.camera.left = X.sun.shadow.camera.bottom = -14; X.sun.shadow.camera.right = X.sun.shadow.camera.top = 14; X.sun.shadow.camera.updateProjectionMatrix();
+const xctl = new THREE.OrbitControls(xcam, $('xcv')); xctl.target.set(0, 2.6, 0); xctl.enableDamping = true; xctl.autoRotate = true; xctl.autoRotateSpeed = 1.4;
+const xGroundMat = new THREE.MeshStandardMaterial({roughness: .95});
+const xFloor = new THREE.Mesh(new THREE.CircleGeometry(16, 64), xGroundMat); xFloor.rotation.x = -Math.PI / 2; xFloor.position.y = -3.2; xFloor.receiveShadow = true; xs.add(xFloor);
+const xgrid = new THREE.GridHelper(32, 32, 0xffffff, 0xffffff); xgrid.position.y = -3.19; xgrid.material.transparent = true; xgrid.material.opacity = .3; xs.add(xgrid);
+const xc = buildCatapult(); xc.pivot.rotation.z = .45;
+const xball = new THREE.Mesh(new THREE.SphereGeometry(.3, 24, 16), ball.material); xball.position.set(L, .1, 0); xball.castShadow = true; xc.pivot.add(xball);
+xs.add(xc.root); xc.root.updateMatrixWorld(true);
+const parts = [[xc.base, [0, -2.6, 0], 'Base'], [xc.frame, [0, .4, 0], 'Soporte y eje'], [xc.beamM, [0, 3.4, 0], 'Brazo'],
+  [xc.weight, [-3, -.6, 0], 'Contrapeso'], [xc.bucket, [2.6, 1.8, 0], 'Cuchara'], [xball, [5.2, 3.4, 0], 'Proyectil']];
+parts.forEach(pt => {                           // etiqueta sobre cada pieza y posición de reposo
+  const o = pt[0], bx = new THREE.Box3().setFromObject(o), c = bx.getCenter(V3(0, 0, 0));
+  const lb = label(pt[2], false); lb.position.copy(o.worldToLocal(V3(c.x, bx.max.y + .9, c.z))); lb.scale.set(3.2, .8, 1); o.add(lb); pt.push(o.position.clone());
+});
+function explode(k){ parts.forEach(([o, off,, p0]) => o.position.copy(p0).addScaledVector(V3(...off), k)); }
+const themeX = () => theme(xs, xGroundMat, () => xgrid.material.color.set(css('--line')));
+
+/* ===== 7. Bucle de render, eventos y pestañas ===== */
+let last = performance.now();
+function loop(now){
+  requestAnimationFrame(loop); const dt = Math.min((now - last) / 1000, .05); last = now;
+  if ($('sim').classList.contains('on')){ stepSim(dt); ctl.update(); size(ren, cam, $('stage')); ren.render(sc, cam); }
+  else if ($('game').classList.contains('on')){ stepGame(dt); }
+  else if ($('des').classList.contains('on')){ xctl.update(); size(xr, xcam, $('xcv')); xr.render(xs, xcam); }
+}
+['ang', 'vel', 'wd', 'wh'].forEach(id => $(id).addEventListener('input', updateUI)); $('wall').addEventListener('change', updateUI);
+$('fire').addEventListener('click', fire);
+$('reset').addEventListener('click', resetSim);
+$('frame').addEventListener('click', () => frameView(false));
+$('exp').addEventListener('input', e => { $('expO').textContent = e.target.value + '%'; explode(e.target.value / 100); });
+$('rot').addEventListener('change', e => { xctl.autoRotate = e.target.checked; });
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => { themeSim(); themeX(); });
+document.querySelectorAll('.tabs button').forEach(b => b.addEventListener('click', () => {
+  document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', x === b));
+  document.querySelectorAll('.view').forEach(v => v.classList.toggle('on', v.id === b.dataset.v));
+}));
+$('file').addEventListener('change', e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('vid').src = URL.createObjectURL(f); $('vid').style.display = 'block'; $('ph').style.display = 'none';
+});
+
+/* ===== 8. Juego en 2D: derriba los objetivos (misma física del proyectil) ===== */
+const stepGame = (() => {
+  const cv = $('gcv'), msg = $('gmsg');
+  const G = 9.81, VMAX = 9.5, WW = 13, F = {x: .8, y: .6}, RB = .15, SHOTS = 4;   // F: eje del brazo (m)
+  /* --- Escena 3D del juego (mismo modelo de catapulta a escala 1:4) --- */
+  const GS = makeScene(cv), sc3 = GS.sc, gcam = new THREE.PerspectiveCamera(42, 1, .05, 800);
+  const gctl = new THREE.OrbitControls(gcam, cv); gctl.enableDamping = true; gctl.maxPolarAngle = Math.PI / 2.02; gctl.minDistance = 2; gctl.maxDistance = 30;
+  gctl.minAzimuthAngle = -1.1; gctl.maxAzimuthAngle = 1.1;
+  const gGroundMat = new THREE.MeshStandardMaterial({roughness: .95});
+  const gGround = new THREE.Mesh(new THREE.PlaneGeometry(400, 400), gGroundMat); gGround.rotation.x = -Math.PI / 2; gGround.receiveShadow = true; sc3.add(gGround);
+  const gGrid = new THREE.GridHelper(120, 120, 0xffffff, 0xffffff); gGrid.position.y = .02; gGrid.material.transparent = true; gGrid.material.opacity = .3; sc3.add(gGrid);
+  for (let m = 2; m <= 12; m += 2){ const lb = label(m + ' m'); lb.scale.set(.8, .2, 1); lb.position.set(m, .3, 1.2); sc3.add(lb); }
+  const gcat = buildCatapult(); gcat.root.scale.setScalar(SC); gcat.root.position.x = F.x; sc3.add(gcat.root);
+  const gBall = new THREE.Mesh(new THREE.SphereGeometry(RB, 24, 16), new THREE.MeshStandardMaterial({color: 0xe0a040, emissive: 0xb8791f, emissiveIntensity: .6, roughness: .3}));
+  gBall.castShadow = true; sc3.add(gBall);
+  const NT = 1500, ntp = new Float32Array(NT * 3), tgeo3 = new THREE.BufferGeometry(); let ntr = 0;   // estela del proyectil
+  tgeo3.setAttribute('position', new THREE.BufferAttribute(ntp, 3)); tgeo3.setDrawRange(0, 0);
+  const gTrail = new THREE.Points(tgeo3, new THREE.PointsMaterial({color: 0xffc261, size: .08, transparent: true, opacity: .85})); gTrail.frustumCulled = false; sc3.add(gTrail);
+  const NP = 300, ppos = new Float32Array(NP * 3), pcol = new Float32Array(NP * 3), pgeo = new THREE.BufferGeometry();   // escombros
+  pgeo.setAttribute('position', new THREE.BufferAttribute(ppos, 3)); pgeo.setAttribute('color', new THREE.BufferAttribute(pcol, 3));
+  const gParts = new THREE.Points(pgeo, new THREE.PointsMaterial({size: .1, vertexColors: true})); gParts.frustumCulled = false; sc3.add(gParts);
+  const GP = 26, gpp = new Float32Array(GP * 3), ggeo = new THREE.BufferGeometry();   // trayectoria prevista
+  ggeo.setAttribute('position', new THREE.BufferAttribute(gpp, 3)); ggeo.setDrawRange(0, 0);
+  const gPrev = new THREE.Points(ggeo, new THREE.PointsMaterial({color: 0xe0a040, size: .1})); gPrev.frustumCulled = false; sc3.add(gPrev);
+  const gMat = {w: new THREE.MeshStandardMaterial({color: 0xa7adb1, roughness: .8}), r: new THREE.MeshStandardMaterial({color: 0x5b6368, roughness: .9}),
+    t: new THREE.MeshStandardMaterial({color: 0xe0a040, roughness: .4, emissive: 0x6b4510, emissiveIntensity: .5})};
+  const eyeMat = new THREE.MeshStandardMaterial({color: 0x1b1b1b});
+  function addMesh(b){                           // bloque = caja · objetivo = esfera con ojos
+    if (b.t === 't'){
+      b.mesh = new THREE.Mesh(new THREE.SphereGeometry(b.w / 2, 24, 16), gMat.t.clone());
+      for (const sx of [-1, 1]){ const e = new THREE.Mesh(new THREE.SphereGeometry(b.w * .08, 10, 8), eyeMat); e.position.set(sx * b.w * .17, b.w * .08, b.w * .46); b.mesh.add(e); }
+    } else b.mesh = new THREE.Mesh(new THREE.BoxGeometry(b.w, b.h, .7), gMat[b.t].clone());
+    b.mesh.castShadow = b.mesh.receiveShadow = true; sc3.add(b.mesh);
+  }
+  GS.sun.position.set(9, 14, 9); GS.sun.target.position.set(6.5, 0, 0);
+  { const sh = GS.sun.shadow.camera; sh.left = sh.bottom = -9; sh.right = sh.top = 9; sh.far = 50; sh.updateProjectionMatrix(); }
+  const themeG = () => theme(sc3, gGroundMat, () => gGrid.material.color.set(css('--line')));
+  themeG(); matchMedia('(prefers-color-scheme: dark)').addEventListener('change', themeG);
+  function setCam(){                             // vista lateral que abarca catapulta y objetivos
+    const asp = cv.clientWidth && cv.clientHeight ? cv.clientWidth / cv.clientHeight : 1.6;
+    gcam.position.set(6.3, 3, Math.max(11, 7.5 / (Math.tan(rad(21)) * asp))); gctl.target.set(6.3, 1.2, 0);
+  }
+  const HP = {w: 2.4, r: 6, t: .7}, PTS = {w: 50, r: 100, t: 500};                          // w madera, r piedra, t objetivo
+  const mk = (x, y, w, h, t) => ({x, y, w, h, t, hp: HP[t], vx: 0, vy: 0, m: w * h * (t === 'r' ? 4.5 : 1.5), dead: false});
+  const LEVELS = [
+    () => [mk(7, 0, .25, 1, 'w'), mk(8.1, 0, .25, 1, 'w'), mk(6.9, 1, 1.55, .2, 'w'), mk(7.45, 1.2, .4, .4, 't'), mk(9.3, 0, .4, .4, 't')],
+    () => [mk(6.5, 0, .3, 1.6, 'r'), mk(8, 0, .4, .4, 't'), mk(8.8, 0, .3, .9, 'w'), mk(9.5, 0, .3, .9, 'w'), mk(8.7, .9, 1.4, .2, 'w'), mk(9.25, 1.1, .4, .4, 't')],
+    () => [mk(7, 0, .3, 1.2, 'r'), mk(9.4, 0, .3, 1.2, 'r'), mk(6.9, 1.2, 3, .2, 'w'), mk(7.6, 0, .4, .4, 't'), mk(8.7, 0, .4, .4, 't'),
+           mk(7.9, 1.4, .3, .8, 'w'), mk(8.5, 1.4, .3, .8, 'w'), mk(7.8, 2.2, 1.1, .2, 'w'), mk(8.2, 2.4, .4, .4, 't')]
+  ];
+  let lvl = 0, blocks = [], parts = [], ball = null, score = 0, base = 0, shots = SHOTS, mode = 'aim', timer = 0, flyT = 0, acc = 0;
+  const aim = {th: rad(45), pw: 0, drag: false};
+  const tip = th => ({x: F.x + SC * (L * Math.cos(th) - .1 * Math.sin(th)), y: F.y + SC * (L * Math.sin(th) + .1 * Math.cos(th))});   // punta del brazo = punto de suelta
+
+  function load(i){ blocks.forEach(b => b.mesh && sc3.remove(b.mesh)); lvl = i; base = score; blocks = LEVELS[i](); blocks.forEach(addMesh); parts = []; ball = null; shots = SHOTS; mode = 'aim'; aim.pw = 0; ntr = 0; tgeo3.setDrawRange(0, 0); setCam(); msg.hidden = true; $('gnext').disabled = true; }
+  function finish(win){
+    mode = win ? 'win' : 'lose'; if (win) score += shots * 300;
+    msg.textContent = win ? `¡Nivel superado! Bonus por disparos sobrantes: ${shots * 300}` : 'Sin disparos. Pulsa «Reiniciar nivel»'; msg.hidden = false; $('gnext').disabled = !win;
+  }
+  function hurt(b, a){                           // daño a un bloque; si se agota su resistencia, se rompe
+    if (a < .8 || b.dead) return; b.hp -= a;
+    if (b.hp <= 0){ b.dead = true; score += PTS[b.t];
+      for (let i = 0; i < 9; i++) parts.push({x: b.x + b.w / 2, y: b.y + b.h / 2, vx: (Math.random() - .5) * 4, vy: Math.random() * 4, life: .8, c: b.t === 't' ? '#e0a040' : b.t === 'r' ? '#5b6368' : '#8a9399'}); }
+  }
+  function support(b){                           // bloque o suelo que sostiene a b
+    let h = 0, o = null;
+    for (const q of blocks) if (q !== b && !q.dead && q.y + q.h <= b.y + .03 && b.x < q.x + q.w - .02 && b.x + b.w > q.x + .02 && q.y + q.h > h){ h = q.y + q.h; o = q; }
+    return {h, o};
+  }
+  function launch(){
+    const t = tip(aim.th); ball = {x: t.x, y: t.y, vx: aim.pw * Math.cos(aim.th), vy: aim.pw * Math.sin(aim.th)};
+    shots--; mode = 'fly'; flyT = 0; aim.pw = 0; ntr = 0; tgeo3.setDrawRange(0, 0);
+  }
+  function step(dt){
+    blocks.sort((a, b) => a.y - b.y);            // se resuelven de abajo hacia arriba
+    for (const b of blocks){
+      if (b.dead) continue;
+      if (b.vx){                                 // deslizamiento con rozamiento y choques entre bloques
+        b.x += b.vx * dt; const f = 4 * dt; b.vx = Math.abs(b.vx) < f ? 0 : b.vx - Math.sign(b.vx) * f;
+        for (const o of blocks){
+          if (o === b || o.dead || !(b.x < o.x + o.w && b.x + b.w > o.x) || Math.min(b.y + b.h, o.y + o.h) - Math.max(b.y, o.y) <= .06) continue;
+          b.x = b.vx > 0 ? o.x - b.w : o.x + o.w;
+          const rel = Math.abs(b.vx - o.vx); hurt(b, rel * .4); hurt(o, rel * .4);
+          b.vx = o.vx = (b.m * b.vx + o.m * o.vx) / (b.m + o.m) * .9;
+        }
+      }
+      const s = support(b);                      // gravedad: cae si no tiene apoyo
+      if (b.y > s.h + .001){
+        b.vy -= G * dt; b.y += b.vy * dt;
+        if (b.y <= s.h){ const im = -b.vy; if (im > 2.2){ hurt(b, (im - 2) * 1.1); if (s.o) hurt(s.o, im * .5); } b.y = s.h; b.vy = 0; }
+      } else { b.y = s.h; b.vy = 0; }
+    }
+    if (ball){                                   // proyectil: tiro parabólico + choques
+      ball.vy -= G * dt; ball.x += ball.vx * dt; ball.y += ball.vy * dt; flyT += dt;
+      if (ball.y <= RB){ ball.y = RB; if (ball.vy < -1){ ball.vy *= -.3; ball.vx *= .8; } else { ball.vy = 0; ball.vx *= 1 - 3 * dt; } }
+      for (const b of blocks){
+        if (b.dead) continue;
+        const qx = Math.max(b.x, Math.min(ball.x, b.x + b.w)), qy = Math.max(b.y, Math.min(ball.y, b.y + b.h));
+        let dx = ball.x - qx, dy = ball.y - qy, d = Math.hypot(dx, dy);
+        if (d >= RB) continue;
+        if (d < 1e-6){ dx = 0; dy = 1; d = 1; }
+        const nx = dx / d, ny = dy / d, vn = ball.vx * nx + ball.vy * ny;
+        if (vn >= 0) continue;
+        hurt(b, -vn * .9);
+        if (b.dead){ ball.vx *= .8; ball.vy *= .8; }
+        else {
+          if (Math.abs(nx) > .5) b.vx -= nx * -vn * .35 / (b.m + .3);   // empuje horizontal
+          ball.vx -= 1.2 * vn * nx; ball.vy -= 1.2 * vn * ny; ball.vx *= .9;
+          ball.x = qx + nx * RB; ball.y = qy + ny * RB;
+        }
+      }
+      if ((ball.y <= RB + .01 && Math.hypot(ball.vx, ball.vy) < .6) || ball.x > WW || flyT > 7){ ball = null; mode = 'settle'; timer = 0; }
+    }
+    parts.forEach(p => { p.vy -= G * dt; p.x += p.vx * dt; p.y += p.vy * dt; p.life -= dt; });
+    parts = parts.filter(p => p.life > 0 && p.y > 0); blocks = blocks.filter(b => { if (b.dead && b.mesh) sc3.remove(b.mesh); return !b.dead; });
+    if (mode === 'settle'){
+      timer += dt; const left = blocks.some(b => b.t === 't');
+      if (!left && timer > .6) finish(true); else if (timer > 1.5){ if (shots <= 0) finish(false); else mode = 'aim'; }
+    }
+  }
+
+  /* Control con el puntero: arrastrar hacia atrás desde la catapulta */
+  const rc = new THREE.Raycaster(), plane = new THREE.Plane(V3(0, 0, 1), 0), hitp = V3(0, 0, 0);   // el puntero se proyecta sobre el plano z = 0
+  const wp = e => { const r = cv.getBoundingClientRect(); rc.setFromCamera({x: (e.clientX - r.left) / r.width * 2 - 1, y: -((e.clientY - r.top) / r.height) * 2 + 1}, gcam); return rc.ray.intersectPlane(plane, hitp) ? {x: hitp.x, y: hitp.y} : null; };
+  cv.addEventListener('pointerdown', e => {      // fase de captura: si se apunta, la cámara no gira
+    if (mode !== 'aim') return; const q = wp(e); if (q && Math.hypot(q.x - F.x, q.y - F.y) <= 1.6) gctl.enabled = false;
+  }, true);
+  function move(e){
+    if (!aim.drag) return; const q = wp(e); if (!q) return; const dx = F.x - q.x, dy = F.y - q.y;
+    aim.th = Math.min(Math.max(Math.atan2(dy, dx), rad(5)), rad(85)); aim.pw = Math.min(Math.hypot(dx, dy) / 1.8, 1) * VMAX;
+  }
+  function release(){ gctl.enabled = true; if (!aim.drag) return; aim.drag = false; if (aim.pw > 1.5) launch(); else aim.pw = 0; }
+  cv.addEventListener('pointerdown', e => {
+    if (mode !== 'aim') return; const q = wp(e); if (!q || Math.hypot(q.x - F.x, q.y - F.y) > 1.6) return;
+    aim.drag = true; cv.setPointerCapture(e.pointerId); move(e);
+  });
+  cv.addEventListener('pointermove', move); cv.addEventListener('pointerup', release); cv.addEventListener('pointercancel', release);
+  $('greset').addEventListener('click', () => { score = base; load(lvl); });
+  $('gnext').addEventListener('click', () => load((lvl + 1) % LEVELS.length));
+
+  function draw(){
+    size(GS.ren, gcam, cv); gctl.update();
+    const th = aim.th, tp = tip(th);
+    gcat.pivot.rotation.z = th;                  // el brazo apunta en la dirección del disparo
+    for (const b of blocks){                     // posición de cada malla y color más oscuro según el daño
+      b.mesh.position.set(b.x + b.w / 2, b.y + b.h / 2, 0);
+      b.mesh.material.color.copy(gMat[b.t].color).multiplyScalar(.45 + .55 * Math.max(b.hp, 0) / HP[b.t]);
+    }
+    if (ball){
+      gBall.visible = true; gBall.position.set(ball.x, ball.y, 0);
+      if (ntr < NT){ ntp.set([ball.x, ball.y, 0], ntr * 3); ntr++; tgeo3.setDrawRange(0, ntr); tgeo3.attributes.position.needsUpdate = true; }
+    } else { gBall.visible = mode === 'aim'; gBall.position.set(tp.x, tp.y, 0); }
+    let n = 0;                                   // trayectoria prevista mientras se apunta
+    if (aim.drag && aim.pw > .1){
+      const vx = aim.pw * Math.cos(th), vy = aim.pw * Math.sin(th);
+      for (let k = 1; k <= GP; k++){ const t = k * .07, py = tp.y + vy * t - .5 * G * t * t; if (py < 0) break; gpp.set([tp.x + vx * t, py, 0], n * 3); n++; }
+    }
+    ggeo.setDrawRange(0, n); ggeo.attributes.position.needsUpdate = true;
+    const col = new THREE.Color();               // escombros
+    parts.slice(0, NP).forEach((p, i) => { ppos.set([p.x, p.y, (i % 5 - 2) * .12], i * 3); col.set(p.c); pcol.set([col.r, col.g, col.b], i * 3); });
+    pgeo.setDrawRange(0, Math.min(parts.length, NP)); pgeo.attributes.position.needsUpdate = pgeo.attributes.color.needsUpdate = true;
+    $('gbar').style.width = (100 * aim.pw / VMAX) + '%';   // barra de fuerza
+    GS.ren.render(sc3, gcam);
+    $('ghud').textContent = `Nivel ${lvl + 1}/${LEVELS.length} · Disparos ${'●'.repeat(shots)}${'○'.repeat(SHOTS - shots)} · Puntos ${score}` + (aim.drag ? ` · ${Math.round(th * 180 / Math.PI)}° · ${aim.pw.toFixed(1)} m/s` : '');
+  }
+  load(0);
+  return dt => { acc += dt; while (acc >= 1 / 120){ step(1 / 120); acc -= 1 / 120; } draw(); };   // paso fijo de 1/120 s
+})();
+
+themeSim(); themeX(); applyPreset(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>
